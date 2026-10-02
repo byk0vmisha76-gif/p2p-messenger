@@ -16,6 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _name = TextEditingController();
   final _url = TextEditingController(text: ServerConfig.url);
   bool _busy = false;
+  bool _showServer = !ServerConfig.hasDefault; // при вшитом адресе поле спрятано
   String? _error;
 
   @override
@@ -74,6 +75,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     decoration: const InputDecoration(labelText: 'Ваше имя', border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 8),
+                  if (!_showServer)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => setState(() => _showServer = true),
+                        child: const Text('Настройки сервера'),
+                      ),
+                    ),
+                  if (_showServer)
                   TextField(
                     controller: _url,
                     keyboardType: TextInputType.url,

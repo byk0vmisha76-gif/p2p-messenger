@@ -8,6 +8,9 @@ const int kKeepDays = 7;
 class ServerConfig {
   static const String _env = String.fromEnvironment('API_URL');
 
+  /// true, если адрес сервера вшит в сборку (--dart-define=API_URL=...)
+  static bool get hasDefault => _env.isNotEmpty;
+
   static String get defaultUrl {
     if (_env.isNotEmpty) return _env;
     // 10.0.2.2 = «компьютер» из эмулятора Android; на ПК — localhost

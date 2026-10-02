@@ -53,6 +53,11 @@ jobs:
       - run: flutter create --project-name messenger --platforms=android .
       - run: flutter pub get
       - run: dart run tool/patch_android.dart
+      - name: Restore signing key (so APK updates install over old versions)
+        env:
+          KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore; echo "key restored"; else echo "no key secret, using a random one"; fi
       - run: flutter build apk --release --dart-define=API_URL=${{ vars.API_URL }}
       - run: cp build/app/outputs/flutter-apk/app-release.apk messenger-android.apk
       - uses: actions/upload-artifact@v4
