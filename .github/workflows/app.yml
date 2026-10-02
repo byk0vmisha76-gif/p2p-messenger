@@ -2,6 +2,7 @@ name: Build app
 
 on:
   push:
+    branches: [main]
     paths: ['app/**', '.github/workflows/app.yml']
     tags: ['v*']
   workflow_dispatch:
