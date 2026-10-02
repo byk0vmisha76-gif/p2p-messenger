@@ -1,0 +1,29 @@
+name: Server tests
+
+on:
+  push:
+    paths: ['server/**', '.github/workflows/server-test.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Start local server and run smoke test
+        run: |
+          npx wrangler dev --port 8787 > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8787/ > /dev/null && break; sleep 1; done
+          npm test
+      - name: Server log (on failure)
+        if: failure()
+        run: cat wrangler.log

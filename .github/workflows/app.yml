@@ -1,0 +1,64 @@
+name: Build app
+
+on:
+  push:
+    paths: ['app/**', '.github/workflows/app.yml']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter create --project-name messenger --platforms=windows .
+      - run: flutter pub get
+      - run: flutter build windows --release --dart-define=API_URL=${{ vars.API_URL }}
+      - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath messenger-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: messenger-windows
+          path: app/messenger-windows.zip
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: app/messenger-windows.zip
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter create --project-name messenger --platforms=android .
+      - run: flutter pub get
+      - run: dart run tool/patch_android.dart
+      - run: flutter build apk --release --dart-define=API_URL=${{ vars.API_URL }}
+      - run: cp build/app/outputs/flutter-apk/app-release.apk messenger-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: messenger-android
+          path: app/messenger-android.apk
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: app/messenger-android.apk

@@ -1,0 +1,13 @@
+name = "p2p-messenger"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# Один Durable Object на каждого пользователя: профиль + очередь офлайн-сообщений.
+# KV и D1 не нужны, ничего вставлять в конфиг не надо.
+[[durable_objects.bindings]]
+name = "MAILBOX"
+class_name = "Mailbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Mailbox"]

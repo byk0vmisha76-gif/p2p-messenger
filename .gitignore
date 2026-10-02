@@ -1,0 +1,20 @@
+# сервер
+node_modules/
+.wrangler/
+.dev.vars
+server/wrangler.log
+
+# приложение: платформенные папки создаёт `flutter create` (локально и в CI)
+app/android/
+app/windows/
+app/ios/
+app/linux/
+app/macos/
+app/web/
+app/test/
+app/.metadata
+app/.dart_tool/
+app/.flutter-plugins*
+app/build/
+app/.idea/
+*.iml
