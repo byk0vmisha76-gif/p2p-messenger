@@ -17,7 +17,7 @@ enum CallState { idle, outgoing, incoming, connecting, active }
 /// или через ретранслятор TURN, если прямой связи нет.
 class CallController extends ChangeNotifier {
   CallController(this.chat) {
-    _sub = chat.signals.listen(_onSignal);
+    _sub = chat.signals.stream.listen(_onSignal);
   }
 
   final ChatService chat;
