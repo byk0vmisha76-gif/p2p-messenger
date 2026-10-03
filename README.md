@@ -43,6 +43,14 @@ Actions -> «Build app» -> последний запуск -> внизу **Arti
 - Проверь офлайн: закрой одно приложение, напиши ему с другого, открой — сообщение должно прийти.
 - Хочешь вшить адрес по умолчанию: Settings -> Secrets and variables -> Actions -> **Variables** -> `API_URL`.
 
+## Звонки
+Голосовые звонки (WebRTC): кнопка с трубкой в чате. Звук идёт напрямую между устройствами; сервер только передаёт сигналы.
+Если прямая связь невозможна, нужен ретранслятор TURN (Cloudflare, бесплатно до 1000 ГБ/мес):
+1. dash.cloudflare.com -> Realtime (или Calls) -> TURN Server -> Create -> скопировать **Turn Token ID** и **API Token**.
+2. GitHub -> Settings -> Secrets and variables -> Actions -> секреты `TURN_KEY_ID` и `TURN_KEY_API_TOKEN`.
+3. Actions -> «Deploy server» -> Run workflow.
+Без этих секретов звонки работают через бесплатный STUN (в большинстве сетей этого достаточно).
+
 ## Локальный сервер для отладки
     cd server && npm install && npm run dev
 В приложении на ПК адрес по умолчанию уже `http://127.0.0.1:8787` (с эмулятора Android: `http://10.0.2.2:8787`).

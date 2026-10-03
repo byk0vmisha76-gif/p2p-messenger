@@ -31,6 +31,17 @@ export default {
       return profile ? json({ found: true, profile }) : json({ found: false }, 404);
     }
 
+    // ICE-серверы для звонков: POST /turn?number=XXXXXXXX с заголовком Authorization: Bearer <token>
+    if (url.pathname === '/turn' && request.method === 'POST') {
+      const number = url.searchParams.get('number') ?? '';
+      const auth = request.headers.get('Authorization') ?? '';
+      const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+      if (!NUMBER_RE.test(number) || !(await mailbox(env, number).verify(token))) {
+        return json({ error: 'unauthorized' }, 401);
+      }
+      return json(await iceServers(env));
+    }
+
     // WebSocket: GET /ws?number=XXXXXXXX с заголовком Authorization: Bearer <token>
     if (url.pathname === '/ws') {
       if (request.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
@@ -39,10 +50,33 @@ export default {
       return mailbox(env, number).fetch(request);
     }
 
-    if (url.pathname === '/') return json({ status: 'ok', version: '0.4.0' });
+    if (url.pathname === '/') return json({ status: 'ok', version: '0.5.0' });
     return new Response('Not found', { status: 404 });
   },
 };
+
+const FALLBACK_ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+
+/** Короткоживущие данные Cloudflare TURN. Если ключ не задан или сервис недоступен, отдаём только STUN. */
+async function iceServers(env) {
+  if (env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN) {
+    try {
+      const r = await fetch(
+        `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ttl: 86400 }),
+        });
+      if (r.ok) {
+        const d = await r.json();
+        const list = Array.isArray(d.iceServers) ? d.iceServers : d.iceServers ? [d.iceServers] : [];
+        if (list.length) return { iceServers: list, turn: true };
+      }
+    } catch {}
+  }
+  return { iceServers: FALLBACK_ICE, turn: false };
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });

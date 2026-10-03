@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import 'api.dart';
@@ -23,6 +24,9 @@ class ChatService extends ChangeNotifier {
   final LocalDb _db = LocalDb.instance;
 
   Conn state = Conn.offline;
+
+  /// Сигналы звонков от сервера (call-offer, call-answer, ice-candidate, call-end, call-unavailable)
+  final StreamController<Map<String, dynamic>> signals = StreamController.broadcast();
   WebSocket? _ws;
   Timer? _ping;
   Timer? _retry;
@@ -136,6 +140,12 @@ class ChatService extends ChangeNotifier {
           final delivered = m['status'] == 'delivered' || m['status'] == 'relayed';
           await _db.setStatus(m['id'] as String, delivered ? 'relayed' : 'stored');
           _changed();
+        case 'call-offer':
+        case 'call-answer':
+        case 'ice-candidate':
+        case 'call-end':
+        case 'call-unavailable':
+          signals.add(m);
         case 'delivered':
           // квитанция: сообщение, ждавшее на сервере, наконец получено (вторая галочка)
           await _db.setStatus(m['id'] as String, 'relayed');
@@ -217,6 +227,32 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  // ---------- звонки ----------
+
+  bool sendSignal(Map<String, dynamic> m) => _raw(jsonEncode(m));
+
+  /// Просто перерисовать экраны (например, после записи «пропущенный звонок» в базу).
+  void refreshUi() => _changed();
+
+  /// STUN/TURN-серверы от нашего сервера; при сбое запасной вариант: публичный STUN.
+  Future<List<Map<String, dynamic>>> iceServers() async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse('${ServerConfig.url}/turn?number=${session.number}'),
+            headers: {'Authorization': 'Bearer ${session.token}'},
+          )
+          .timeout(const Duration(seconds: 6));
+      if (r.statusCode == 200) {
+        final d = jsonDecode(r.body) as Map<String, dynamic>;
+        return [for (final s in d['iceServers'] as List) Map<String, dynamic>.from(s as Map)];
+      }
+    } catch (_) {}
+    return [
+      {'urls': ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302']},
+    ];
+  }
+
   // ---------- автоудаление ----------
 
   Future<void> cleanup() async {
@@ -230,6 +266,7 @@ class ChatService extends ChangeNotifier {
     _ping?.cancel();
     _retry?.cancel();
     _ws?.close();
+    signals.close();
     super.dispose();
   }
 }

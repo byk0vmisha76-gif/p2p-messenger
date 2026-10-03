@@ -30,6 +30,7 @@ WebSocket: `GET /ws?number=XXXXXXXX`, заголовок `Authorization: Bearer 
 - `{type:'check', items:[{id,to}]}` — «какие из моих сообщений, лежавших на сервере, уже получены?» (ответ: `delivered` по каждому)
 - `{type:'ack', ids:[...]}` — «сохранил у себя». На ack сервер считает сообщение доставленным и удаляет его из очереди
 - `{type:'call-offer'|'call-answer'|'ice-candidate'|'call-end', to, sdp?, candidate?}`
+- звонки: `{type:'call-offer'|'call-answer'|'ice-candidate'|'call-end', to, callId, sdp?, candidate?, reason?}` — сервер только пересылает (с полем `from`); офлайн-абоненту на `call-offer` отвечает `{type:'call-unavailable', to, callId}`
 - текст `ping` -> сервер отвечает `pong` (слать раз в ~25 сек)
 
 Сервер -> клиент:

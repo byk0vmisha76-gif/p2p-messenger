@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'call.dart';
 import 'chat_service.dart';
 import 'db.dart';
+import 'screens/call_overlay.dart';
 import 'screens/chats_screen.dart';
 import 'screens/register_screen.dart';
 import 'session.dart';
@@ -25,6 +27,7 @@ class App extends StatefulWidget {
 class _AppState extends State<App> with WidgetsBindingObserver {
   Session? _session;
   ChatService? _service;
+  CallController? _call;
   Timer? _cleanupTimer;
 
   @override
@@ -38,6 +41,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void _start(Session s) {
     final svc = ChatService(s);
     _service = svc;
+    _call = CallController(svc);
     svc.cleanup();
     svc.connect();
     _cleanupTimer = Timer.periodic(const Duration(hours: 1), (_) => svc.cleanup());
@@ -55,6 +59,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   /// Выход: закрываем соединение, стираем аккаунт и историю на этом устройстве.
   Future<void> _logout() async {
     _cleanupTimer?.cancel();
+    _call?.dispose();
+    _call = null;
     _service?.dispose();
     _service = null;
     await SessionStore.clear();
@@ -75,6 +81,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cleanupTimer?.cancel();
+    _call?.dispose();
     _service?.dispose();
     super.dispose();
   }
@@ -86,9 +93,16 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
       darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal, brightness: Brightness.dark),
+      builder: (context, child) => Stack(
+        fit: StackFit.expand,
+        children: [
+          child ?? const SizedBox.shrink(),
+          if (_call != null) Positioned.fill(child: CallOverlay(call: _call!)),
+        ],
+      ),
       home: _session == null
           ? RegisterScreen(onDone: _onRegistered)
-          : ChatsScreen(service: _service!, onLogout: _logout),
+          : ChatsScreen(service: _service!, call: _call!, onLogout: _logout),
     );
   }
 }

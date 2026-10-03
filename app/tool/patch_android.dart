@@ -1,5 +1,5 @@
 // Запуск (после `flutter create`): dart run tool/patch_android.dart
-// Добавляет разрешение INTERNET и разрешает http://10.0.2.2 только в debug-сборке.
+// Добавляет разрешения (интернет, микрофон для звонков) и разрешает http://10.0.2.2 только в debug-сборке.
 import 'dart:io';
 
 void main() {
@@ -9,9 +9,19 @@ void main() {
     exit(1);
   }
   var s = main.readAsStringSync();
-  if (!s.contains('android.permission.INTERNET')) {
-    s = s.replaceFirst('<application',
-        '<uses-permission android:name="android.permission.INTERNET"/>\n    <application');
+  const perms = [
+    'INTERNET',
+    'RECORD_AUDIO',
+    'MODIFY_AUDIO_SETTINGS',
+    'ACCESS_NETWORK_STATE',
+    'CHANGE_NETWORK_STATE',
+  ];
+  final missing = perms.where((p) => !s.contains('android.permission.$p')).toList();
+  if (missing.isNotEmpty) {
+    final block = missing
+        .map((p) => '<uses-permission android:name="android.permission.$p"/>')
+        .join('\n    ');
+    s = s.replaceFirst('<application', '$block\n    <application');
     main.writeAsStringSync(s);
   }
   final debug = File('android/app/src/debug/AndroidManifest.xml');

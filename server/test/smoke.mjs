@@ -43,6 +43,12 @@ await assert.rejects(open(b.number, 'wrong'), /401/);
 await assert.rejects(open(b.number, a.token), /401/);
 step('чужой/неверный токен -> 401');
 
+const turn401 = await fetch(`${HTTP}/turn?number=${a.number}`, { method: 'POST', headers: { Authorization: `Bearer ${b.token}` } });
+assert.equal(turn401.status, 401);
+const turnOk = await (await fetch(`${HTTP}/turn?number=${a.number}`, { method: 'POST', headers: { Authorization: `Bearer ${a.token}` } })).json();
+assert.ok(Array.isArray(turnOk.iceServers) && turnOk.iceServers.length > 0);
+step('/turn: чужой токен -> 401; свой -> список ICE-серверов (без TURN-ключа только STUN)');
+
 // ---- Боря офлайн ----
 let wa = await open(a.number, a.token);
 const t1 = Date.now() - 60_000;
@@ -145,13 +151,21 @@ send(wb, { type: 'ack', ids: ['z'] }); await next(wa);
 step('ошибки: несуществующий номер / сам себе; время «из будущего» обрезается');
 
 // ---- звонки ----
-send(wa, { type: 'call-offer', to: b.number, sdp: 'SDP' });
+send(wa, { type: 'call-offer', to: b.number, callId: 'c1', sdp: 'SDP' });
 const offer = await next(wb);
-assert.equal(offer.type, 'call-offer'); assert.equal(offer.from, a.number);
+assert.equal(offer.type, 'call-offer'); assert.equal(offer.from, a.number); assert.equal(offer.callId, 'c1');
+send(wb, { type: 'ice-candidate', to: a.number, callId: 'c1', candidate: { candidate: 'x', sdpMid: '0', sdpMLineIndex: 0 } });
+const ice = await next(wa);
+assert.equal(ice.callId, 'c1'); assert.equal(ice.candidate.sdpMLineIndex, 0);
+send(wb, { type: 'call-end', to: a.number, callId: 'c1', reason: 'decline' });
+const end = await next(wa);
+assert.deepEqual([end.type, end.reason, end.callId], ['call-end', 'decline', 'c1']);
 wb.close(); await sleep(300);
-send(wa, { type: 'call-offer', to: b.number, sdp: 'SDP' });
-assert.equal((await next(wa)).type, 'call-unavailable');
-step('звонки: сигнал доходит онлайн, офлайн -> call-unavailable');
+send(wa, { type: 'call-offer', to: b.number, callId: 'c2', sdp: 'SDP' });
+assert.deepEqual(await next(wa), { type: 'call-unavailable', to: b.number, callId: 'c2' });
+send(wa, { type: 'call-end', to: b.number, callId: 'c2', reason: 'hangup' });
+await assert.rejects(next(wa, 600), /timeout/);   // отбой офлайн-абоненту: без лишних ответов
+step('звонки: offer/ice/end доходят с callId и reason; офлайн -> call-unavailable только на offer');
 
 wa.close();
 console.log('\nВсё работает');

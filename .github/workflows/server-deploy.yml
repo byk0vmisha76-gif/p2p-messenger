@@ -1,5 +1,6 @@
 # Ручной запуск: Actions -> "Deploy server" -> Run workflow.
 # Нужны секреты репозитория CLOUDFLARE_API_TOKEN и CLOUDFLARE_ACCOUNT_ID (см. README).
+# Необязательно (для звонков через ретранслятор): TURN_KEY_ID и TURN_KEY_API_TOKEN.
 name: Deploy server
 
 on:
@@ -8,11 +9,29 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      TURN_KEY_ID: ${{ secrets.TURN_KEY_ID }}
+      TURN_KEY_API_TOKEN: ${{ secrets.TURN_KEY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: cloudflare/wrangler-action@v3
+
+      - name: Deploy (without TURN keys)
+        if: ${{ env.TURN_KEY_ID == '' || env.TURN_KEY_API_TOKEN == '' }}
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: server
           command: deploy
+
+      - name: Deploy (with TURN keys)
+        if: ${{ env.TURN_KEY_ID != '' && env.TURN_KEY_API_TOKEN != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: server
+          command: deploy
+          secrets: |
+            TURN_KEY_ID
+            TURN_KEY_API_TOKEN

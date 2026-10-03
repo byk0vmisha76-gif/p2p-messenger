@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../call.dart';
 import '../chat_service.dart';
 import '../config.dart';
 import '../db.dart';
@@ -11,8 +12,9 @@ import '../models.dart';
 import '../util.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, required this.service, required this.contact});
+  const ChatScreen({super.key, required this.service, required this.call, required this.contact});
   final ChatService service;
+  final CallController call;
   final Contact contact;
 
   @override
@@ -116,6 +118,13 @@ class _ChatScreenState extends State<ChatScreen> {
             Text(widget.contact.number, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Позвонить',
+            icon: const Icon(Icons.call),
+            onPressed: () => widget.call.start(widget.contact.number),
+          ),
+        ],
       ),
       body: Column(
         children: [

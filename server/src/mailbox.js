@@ -42,6 +42,12 @@ export class Mailbox extends DurableObject {
     return true;
   }
 
+  /** Проверка токена (для выдачи ICE-серверов). */
+  async verify(token) {
+    const p = this.#profile();
+    return !!p && typeof token === 'string' && token.length > 0 && safeEqual(await sha256Hex(token), p.token_hash);
+  }
+
   async publicProfile() {
     const p = this.#profile();
     return p ? { number: p.number, name: p.name } : null;
@@ -170,10 +176,12 @@ export class Mailbox extends DurableObject {
     if (SIGNAL_TYPES.has(data.type)) {
       if (raw.length > MAX_SIGNAL_BYTES) return reply(ws, { type: 'error', code: 'too_big' });
       if (!NUMBER_RE.test(data.to) || data.to === me) return reply(ws, { type: 'error', code: 'bad_recipient' });
+      const callId = typeof data.callId === 'string' ? data.callId.slice(0, 64) : undefined;
+      const reason = typeof data.reason === 'string' ? data.reason.slice(0, 32) : undefined;
       const ok = await this.#mailbox(data.to).signal({
-        type: data.type, from: me, sdp: data.sdp, candidate: data.candidate,
+        type: data.type, from: me, callId, reason, sdp: data.sdp, candidate: data.candidate,
       });
-      if (!ok) reply(ws, { type: 'call-unavailable', to: data.to });
+      if (!ok && data.type === 'call-offer') reply(ws, { type: 'call-unavailable', to: data.to, callId });
       return;
     }
 

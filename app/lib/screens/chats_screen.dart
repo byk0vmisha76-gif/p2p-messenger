@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../call.dart';
 import '../chat_service.dart';
 import '../config.dart';
 import '../db.dart';
@@ -10,8 +11,9 @@ import '../util.dart';
 import 'chat_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.service, required this.onLogout});
+  const ChatsScreen({super.key, required this.service, required this.call, required this.onLogout});
   final ChatService service;
+  final CallController call;
   final Future<void> Function() onLogout;
 
   @override
@@ -52,7 +54,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Future<void> _openChat(Contact c) => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ChatScreen(service: widget.service, contact: c)),
+        MaterialPageRoute(builder: (_) => ChatScreen(service: widget.service, call: widget.call, contact: c)),
       );
 
   Future<void> _addContact() async {
