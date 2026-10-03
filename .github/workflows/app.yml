@@ -24,7 +24,15 @@ jobs:
           cache: true
       - run: flutter create --project-name messenger --platforms=windows .
       - run: flutter pub get
-      - run: flutter build windows --release --dart-define=API_URL=${{ vars.API_URL }} --dart-define=APP_VERSION=${{ github.ref_name }}
+      - name: Build Windows
+        shell: pwsh
+        run: |
+          flutter build windows --release --dart-define=API_URL=${{ vars.API_URL }} --dart-define=APP_VERSION=${{ github.ref_name }} *>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            $t = (Select-String -Path build.log -Pattern 'error|Error|FAILED|Exception|fatal' -Context 0,2 | Select-Object -First 25 | ForEach-Object { ($_.Line + ' ' + ($_.Context.PostContext -join ' ')) }) -join '%0A'
+            Write-Host "::error title=Windows build errors::$t"
+            exit 1
+          }
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath messenger-windows.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -58,7 +66,15 @@ jobs:
           KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: |
           if [ -n "$KS" ]; then mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore; echo "key restored"; else echo "no key secret, using a random one"; fi
-      - run: flutter build apk --release --dart-define=API_URL=${{ vars.API_URL }} --dart-define=APP_VERSION=${{ github.ref_name }}
+      - name: Build APK
+        run: |
+          set +e
+          flutter build apk --release --dart-define=API_URL=${{ vars.API_URL }} --dart-define=APP_VERSION=${{ github.ref_name }} 2>&1 | tee build.log
+          if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+            T=$(grep -E -A2 "Error|error:|FAILURE|What went wrong|Exception|Could not" build.log | head -60 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=APK build errors::$T"
+            exit 1
+          fi
       - run: cp build/app/outputs/flutter-apk/app-release.apk messenger-android.apk
       - uses: actions/upload-artifact@v4
         with:
