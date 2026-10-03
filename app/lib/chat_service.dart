@@ -131,7 +131,13 @@ class ChatService extends ChangeNotifier {
         case 'message':
           await _onIncoming(m);
         case 'sent':
-          await _db.setStatus(m['id'] as String, m['status'] == 'relayed' ? 'relayed' : 'stored');
+          // delivered = получатель подтвердил приём; stored = лежит на сервере, ждёт его
+          final delivered = m['status'] == 'delivered' || m['status'] == 'relayed';
+          await _db.setStatus(m['id'] as String, delivered ? 'relayed' : 'stored');
+          _changed();
+        case 'delivered':
+          // квитанция: сообщение, ждавшее на сервере, наконец получено (вторая галочка)
+          await _db.setStatus(m['id'] as String, 'relayed');
           _changed();
         case 'error':
           final id = m['id'];
@@ -187,7 +193,7 @@ class ChatService extends ChangeNotifier {
   }
 
   bool _transmit(Msg m) =>
-      _raw(jsonEncode({'type': 'message', 'id': m.id, 'to': m.peer, 'text': m.text}));
+      _raw(jsonEncode({'type': 'message', 'id': m.id, 'to': m.peer, 'text': m.text, 'ts': m.ts}));
 
   Future<void> _resendPending() async {
     for (final m in await _db.pendingOutgoing()) {

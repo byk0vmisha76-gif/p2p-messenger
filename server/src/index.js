@@ -39,7 +39,7 @@ export default {
       return mailbox(env, number).fetch(request);
     }
 
-    if (url.pathname === '/') return json({ status: 'ok', version: '0.2.0' });
+    if (url.pathname === '/') return json({ status: 'ok', version: '0.3.0' });
     return new Response('Not found', { status: 404 });
   },
 };

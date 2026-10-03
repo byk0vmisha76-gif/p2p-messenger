@@ -62,8 +62,15 @@ class LocalDb {
     return true;
   }
 
-  Future<void> setStatus(String id, String status) =>
-      _db.update('messages', {'status': status}, where: 'id = ? AND mine = 1', whereArgs: [id]);
+  Future<void> setStatus(String id, String status) => _db.update(
+        'messages',
+        {'status': status},
+        // «на сервере» не должно затирать уже полученное «доставлено»
+        where: status == 'stored'
+            ? "id = ? AND mine = 1 AND status IN ('sending', 'stored')"
+            : 'id = ? AND mine = 1',
+        whereArgs: [id],
+      );
 
   Future<List<Msg>> messagesWith(String peer) async {
     final rows = await _db.query('messages', where: 'peer = ?', whereArgs: [peer], orderBy: 'ts ASC');

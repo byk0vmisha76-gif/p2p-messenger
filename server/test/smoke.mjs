@@ -26,6 +26,7 @@ const next = (ws, ms = 3000) => new Promise((res, rej) => {
   ws.waiters.push(w);
 });
 const send = (ws, o) => ws.send(JSON.stringify(o));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const step = (s) => console.log('✓', s);
 
 const a = await post('/register', { name: 'Аня' });
@@ -42,54 +43,78 @@ await assert.rejects(open(b.number, 'wrong'), /401/);
 await assert.rejects(open(b.number, a.token), /401/);
 step('чужой/неверный токен -> 401');
 
-// Боря офлайн
+// ---- Боря офлайн ----
 const wa = await open(a.number, a.token);
-send(wa, { type: 'message', id: 'm1', to: b.number, text: 'привет, ты офлайн' });
+const t1 = Date.now() - 60_000;
+send(wa, { type: 'message', id: 'm1', to: b.number, text: 'привет, ты офлайн', ts: t1 });
 send(wa, { type: 'message', id: 'm2', to: b.number, text: 'второе' });
 assert.deepEqual(await next(wa), { type: 'sent', id: 'm1', to: b.number, status: 'stored' });
 assert.equal((await next(wa)).status, 'stored');
 step('получатель офлайн -> сообщения на сервере (stored)');
 
-// Боря приходит онлайн -> получает накопленное
 let wb = await open(b.number, b.token);
 const q1 = await next(wb), q2 = await next(wb);
 assert.deepEqual([q1.text, q2.text], ['привет, ты офлайн', 'второе']);
 assert.equal(q1.from, a.number); assert.equal(q1.queued, true);
-step('Боря онлайн -> получил очередь по порядку, from выставил сервер');
+assert.equal(q1.ts, t1, 'время создания сохраняется (на обоих экранах одинаковое)');
+step('Боря онлайн -> очередь по порядку; from ставит сервер; время создания сохранено');
 
-// Без ack сообщения остаются; Боря переподключается
-wb.close(); await new Promise((r) => setTimeout(r, 300));
+wb.close(); await sleep(300);
 wb = await open(b.number, b.token);
 assert.equal((await next(wb)).id, 'm1'); assert.equal((await next(wb)).id, 'm2');
 step('без ack очередь не потеряна (переподключение)');
 
-// ack -> удалено с сервера
 send(wb, { type: 'ack', ids: ['m1', 'm2'] });
-await new Promise((r) => setTimeout(r, 300));
-wb.close(); await new Promise((r) => setTimeout(r, 300));
+const r1 = await next(wa), r2 = await next(wa);
+assert.deepEqual([r1.type, r1.id, r1.to], ['delivered', 'm1', b.number]);
+assert.deepEqual([r2.type, r2.id], ['delivered', 'm2']);
+step('ack -> отправитель получает квитанции (вторая галочка у «stored»)');
+
+wb.close(); await sleep(300);
 wb = await open(b.number, b.token);
 await assert.rejects(next(wb, 700), /timeout/);
 step('после ack на сервере пусто');
 
-// Оба онлайн -> напрямую
+// ---- оба онлайн ----
 send(wa, { type: 'message', id: 'm3', to: b.number, text: 'live' });
-assert.equal((await next(wa)).status, 'relayed');
 const live = await next(wb);
 assert.equal(live.text, 'live'); assert.ok(!live.queued);
-step('оба онлайн -> relayed, ничего не хранится');
+send(wb, { type: 'ack', ids: ['m3'] });
+assert.deepEqual(await next(wa), { type: 'sent', id: 'm3', to: b.number, status: 'delivered' });
+step('оба онлайн -> delivered только после ack получателя');
 
-// Ошибки
+// ---- ТВОЙ СЛУЧАЙ: соединение «мёртвое», получатель не подтверждает ----
+const t0 = Date.now();
+send(wa, { type: 'message', id: 'm4', to: b.number, text: 'у меня тож' });
+assert.equal((await next(wb)).id, 'm4');                    // ушло в сокет, но ack не будет
+const sent4 = await next(wa, 10_000);
+assert.equal(sent4.status, 'stored');
+assert.ok(Date.now() - t0 >= 5000, 'ждали подтверждение ~6 секунд');
+step('нет ack за 6 с -> НЕ «доставлено», сообщение сохранено на сервере (одна галочка)');
+
+wb.close(); await sleep(300);
+wb = await open(b.number, b.token);
+const again = await next(wb);
+assert.equal(again.id, 'm4'); assert.equal(again.queued, true);
+send(wb, { type: 'ack', ids: ['m4'] });
+assert.deepEqual(await next(wa), { type: 'delivered', id: 'm4', to: b.number });
+step('получатель вернулся -> получил потерянное сообщение, отправитель получил вторую галочку');
+
+// ---- ошибки ----
 send(wa, { type: 'message', id: 'x', to: '12345678', text: 'в никуда' });
 assert.equal((await next(wa)).code, 'not_found');
 send(wa, { type: 'message', id: 'y', to: a.number, text: 'себе' });
 assert.equal((await next(wa)).code, 'bad_recipient');
-step('несуществующий номер / сам себе -> ошибка');
+send(wa, { type: 'message', id: 'z', to: b.number, text: 'из будущего', ts: Date.now() + 10 ** 9 });
+assert.equal((await next(wb)).ts <= Date.now(), true);
+send(wb, { type: 'ack', ids: ['z'] }); await next(wa);
+step('ошибки: несуществующий номер / сам себе; время «из будущего» обрезается');
 
-// Сигнализация звонка
+// ---- звонки ----
 send(wa, { type: 'call-offer', to: b.number, sdp: 'SDP' });
 const offer = await next(wb);
 assert.equal(offer.type, 'call-offer'); assert.equal(offer.from, a.number);
-wb.close(); await new Promise((r) => setTimeout(r, 300));
+wb.close(); await sleep(300);
 send(wa, { type: 'call-offer', to: b.number, sdp: 'SDP' });
 assert.equal((await next(wa)).type, 'call-unavailable');
 step('звонки: сигнал доходит онлайн, офлайн -> call-unavailable');

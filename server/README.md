@@ -26,14 +26,15 @@ HTTP:
 WebSocket: `GET /ws?number=XXXXXXXX`, заголовок `Authorization: Bearer <token>`
 
 Клиент -> сервер:
-- `{type:'message', id, to, text}` (`id` — UUID, генерирует клиент)
-- `{type:'ack', ids:[...]}` — «сохранил у себя, можно удалять»
+- `{type:'message', id, to, text, ts}` (`id` — UUID, `ts` — время создания в мс, оба генерирует клиент)
+- `{type:'ack', ids:[...]}` — «сохранил у себя». На ack сервер считает сообщение доставленным и удаляет его из очереди
 - `{type:'call-offer'|'call-answer'|'ice-candidate'|'call-end', to, sdp?, candidate?}`
 - текст `ping` -> сервер отвечает `pong` (слать раз в ~25 сек)
 
 Сервер -> клиент:
 - `{type:'message', id, from, text, ts, queued?}`
-- `{type:'sent', id, to, status:'relayed'|'stored'}`
+- `{type:'sent', id, to, status:'delivered'|'stored'}`: delivered = получатель подтвердил; stored = лежит на сервере
+- `{type:'delivered', id, to}` — позже: сообщение из очереди получено (вторая галочка)
 - `{type:'error', id?, code}` (`not_found`, `queue_full`, `bad_text`, ...)
 - `{type:'call-unavailable', to}` и сигналы звонков
 
