@@ -134,7 +134,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: Text('Ваш номер: ${me.number}'),
-            subtitle: Text('${me.name} · ${Uri.parse(ServerConfig.url).host}'),
+            subtitle: Text('${me.name} · ${Uri.parse(ServerConfig.url).host} · $kAppVersion'),
             trailing: IconButton(
               tooltip: 'Скопировать номер',
               icon: const Icon(Icons.copy),

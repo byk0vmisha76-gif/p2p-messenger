@@ -82,6 +82,13 @@ class LocalDb {
     return rows.map(Msg.fromMap).toList();
   }
 
+  /// Свои сообщения, которые лежат на сервере и ждут получателя.
+  Future<List<Msg>> storedOutgoing() async {
+    final rows = await _db.query('messages',
+        where: "mine = 1 AND status = 'stored'", orderBy: 'ts ASC', limit: 100);
+    return rows.map(Msg.fromMap).toList();
+  }
+
   Future<List<ChatPreview>> chats() async {
     final rows = await _db.rawQuery('''
       SELECT c.number, c.name, m.id, m.mine, m.text, m.ts, m.status

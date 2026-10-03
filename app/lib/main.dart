@@ -67,7 +67,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _service?.cleanup();
-      _service?.connect();
+      _service?.refresh();
     }
   }
 

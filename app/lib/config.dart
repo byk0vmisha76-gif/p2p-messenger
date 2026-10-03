@@ -1,5 +1,8 @@
 import 'dart:io';
 
+/// Версия сборки (подставляется из тега при сборке в GitHub Actions)
+const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: 'dev');
+
 /// Сколько дней хранить сообщения на телефоне/компьютере. Старше удаляются автоматически.
 const int kKeepDays = 7;
 

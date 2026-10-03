@@ -24,7 +24,7 @@ jobs:
           cache: true
       - run: flutter create --project-name messenger --platforms=windows .
       - run: flutter pub get
-      - run: flutter build windows --release --dart-define=API_URL=${{ vars.API_URL }}
+      - run: flutter build windows --release --dart-define=API_URL=${{ vars.API_URL }} --dart-define=APP_VERSION=${{ github.ref_name }}
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath messenger-windows.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -58,7 +58,7 @@ jobs:
           KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: |
           if [ -n "$KS" ]; then mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore; echo "key restored"; else echo "no key secret, using a random one"; fi
-      - run: flutter build apk --release --dart-define=API_URL=${{ vars.API_URL }}
+      - run: flutter build apk --release --dart-define=API_URL=${{ vars.API_URL }} --dart-define=APP_VERSION=${{ github.ref_name }}
       - run: cp build/app/outputs/flutter-apk/app-release.apk messenger-android.apk
       - uses: actions/upload-artifact@v4
         with:

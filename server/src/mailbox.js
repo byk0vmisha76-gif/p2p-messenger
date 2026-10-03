@@ -61,7 +61,19 @@ export class Mailbox extends DurableObject {
       if (await this.#waitAck(msg.id)) return 'delivered';
       break; // подтверждения нет -> считаем, что сообщение не дошло
     }
-    return this.#store(msg);
+    const status = await this.#store(msg);
+    if (status === 'stored') {
+      // за время ожидания получатель мог переподключиться: отдаём сразу, а не ждём следующего подключения
+      for (const ws of this.#openSockets()) {
+        try { ws.send(JSON.stringify({ type: 'message', ...msg, queued: true })); break; } catch {}
+      }
+    }
+    return status;
+  }
+
+  /** Лежит ли ещё в очереди сообщение от этого отправителя (для проверки статуса). */
+  async hasQueued(id, sender) {
+    return this.sql.exec('SELECT 1 FROM queue WHERE id = ? AND sender = ?', id, sender).toArray().length > 0;
   }
 
   /** Уведомление отправителю: его сообщение, лежавшее в очереди, получено. Не хранится. */
@@ -140,6 +152,18 @@ export class Mailbox extends DurableObject {
         // отправитель увидит вторую галочку (если он сейчас онлайн; квитанции не хранятся)
         try { await this.#mailbox(row.sender).receipt({ type: 'delivered', id, to: me }); } catch {}
       }
+      return;
+    }
+
+    if (data.type === 'check') {
+      // отправитель вернулся в сеть и спрашивает: мои «лежащие на сервере» уже получены?
+      const items = Array.isArray(data.items) ? data.items.slice(0, 100) : [];
+      await Promise.all(items.map(async (it) => {
+        if (!it || typeof it.id !== 'string' || !NUMBER_RE.test(it.to) || it.to === me) return;
+        let queued = true;
+        try { queued = await this.#mailbox(it.to).hasQueued(it.id, me); } catch {}
+        if (!queued) reply(ws, { type: 'delivered', id: it.id, to: it.to });
+      }));
       return;
     }
 

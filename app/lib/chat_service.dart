@@ -57,6 +57,7 @@ class ChatService extends ChangeNotifier {
       _ping = Timer.periodic(const Duration(seconds: 25), (_) => _tick());
       _setState(Conn.online);
       await _resendPending();
+      await _checkStored();
     } catch (_) {
       _scheduleRetry();
     }
@@ -194,6 +195,21 @@ class ChatService extends ChangeNotifier {
 
   bool _transmit(Msg m) =>
       _raw(jsonEncode({'type': 'message', 'id': m.id, 'to': m.peer, 'text': m.text, 'ts': m.ts}));
+
+  /// Спрашиваем сервер, получены ли уже наши «лежавшие на сервере» сообщения
+  /// (квитанцию можно было пропустить, пока мы были офлайн).
+  Future<void> _checkStored() async {
+    final items = [
+      for (final m in await _db.storedOutgoing()) {'id': m.id, 'to': m.peer},
+    ];
+    if (items.isNotEmpty) _raw(jsonEncode({'type': 'check', 'items': items}));
+  }
+
+  /// Вызывается при возврате в приложение: переподключиться и обновить статусы.
+  Future<void> refresh() async {
+    await connect();
+    if (state == Conn.online) await _checkStored();
+  }
 
   Future<void> _resendPending() async {
     for (final m in await _db.pendingOutgoing()) {

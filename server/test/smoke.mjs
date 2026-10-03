@@ -44,7 +44,7 @@ await assert.rejects(open(b.number, a.token), /401/);
 step('чужой/неверный токен -> 401');
 
 // ---- Боря офлайн ----
-const wa = await open(a.number, a.token);
+let wa = await open(a.number, a.token);
 const t1 = Date.now() - 60_000;
 send(wa, { type: 'message', id: 'm1', to: b.number, text: 'привет, ты офлайн', ts: t1 });
 send(wa, { type: 'message', id: 'm2', to: b.number, text: 'второе' });
@@ -99,6 +99,40 @@ assert.equal(again.id, 'm4'); assert.equal(again.queued, true);
 send(wb, { type: 'ack', ids: ['m4'] });
 assert.deepEqual(await next(wa), { type: 'delivered', id: 'm4', to: b.number });
 step('получатель вернулся -> получил потерянное сообщение, отправитель получил вторую галочку');
+
+// ---- отправитель был офлайн в момент ack -> «check» при подключении ----
+wb.close(); await sleep(300);
+send(wa, { type: 'message', id: 'm6', to: b.number, text: 'пока ты офлайн' });
+assert.equal((await next(wa)).status, 'stored');
+wa.close(); await sleep(300);
+wb = await open(b.number, b.token);
+assert.equal((await next(wb)).id, 'm6');
+send(wb, { type: 'ack', ids: ['m6'] }); await sleep(500);          // квитанция уходит «в пустоту»
+wa = await open(a.number, a.token);
+send(wa, { type: 'check', items: [{ id: 'm6', to: b.number }] });
+assert.deepEqual(await next(wa), { type: 'delivered', id: 'm6', to: b.number });
+wb.close(); await sleep(300);
+send(wa, { type: 'message', id: 'm7', to: b.number, text: 'ещё лежит' });
+assert.equal((await next(wa)).status, 'stored');
+send(wa, { type: 'check', items: [{ id: 'm7', to: b.number }] });
+await assert.rejects(next(wa, 700), /timeout/);                     // ещё не получено -> молчим
+wb = await open(b.number, b.token);
+assert.equal((await next(wb)).id, 'm7');
+send(wb, { type: 'ack', ids: ['m7'] });
+assert.equal((await next(wa)).type, 'delivered');
+step('квитанция потерялась (отправитель офлайн) -> check при подключении даёт вторую галочку');
+
+// ---- получатель переподключился, пока сервер ждал ack ----
+send(wa, { type: 'message', id: 'm8', to: b.number, text: 'переподключение' });
+assert.equal((await next(wb)).id, 'm8');                            // ушло в старый сокет, ack не будет
+const wb3 = await open(b.number, b.token);                          // получатель переподключился
+assert.equal((await next(wa, 10_000)).status, 'stored');
+const m8 = await next(wb3, 10_000);
+assert.equal(m8.id, 'm8');                                          // не застряло в очереди
+send(wb3, { type: 'ack', ids: ['m8'] });
+assert.equal((await next(wa)).type, 'delivered');
+wb = wb3;
+step('переподключение во время ожидания ack -> сообщение не застревает');
 
 // ---- ошибки ----
 send(wa, { type: 'message', id: 'x', to: '12345678', text: 'в никуда' });

@@ -27,6 +27,7 @@ WebSocket: `GET /ws?number=XXXXXXXX`, заголовок `Authorization: Bearer 
 
 Клиент -> сервер:
 - `{type:'message', id, to, text, ts}` (`id` — UUID, `ts` — время создания в мс, оба генерирует клиент)
+- `{type:'check', items:[{id,to}]}` — «какие из моих сообщений, лежавших на сервере, уже получены?» (ответ: `delivered` по каждому)
 - `{type:'ack', ids:[...]}` — «сохранил у себя». На ack сервер считает сообщение доставленным и удаляет его из очереди
 - `{type:'call-offer'|'call-answer'|'ice-candidate'|'call-end', to, sdp?, candidate?}`
 - текст `ping` -> сервер отвечает `pong` (слать раз в ~25 сек)
